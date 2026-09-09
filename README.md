@@ -175,47 +175,4 @@ resume) the app with that thread showing. See "Known limitations" below for
 why the suppression behavior can't currently be exercised through the UI at
 all.
 
-## Cleartext traffic
 
-The manifest sets `android:usesCleartextTraffic="true"` app-wide, because the
-dev server is plain `http://`. That's fine for local development but is a
-broad flag — Android 9+ blocks cleartext by default for good reason. Before
-this touches anything beyond your own dev machine, either serve over HTTPS or
-replace the blanket flag with a network security config scoped to just your
-dev server's host/IP.
-
-## Known limitations
-
-- **Not build-verified here.** Like the earlier HybridFlow project, this was
-  written and reviewed by hand in a sandbox without Android SDK/Google Maven
-  access — I could not run `./gradlew assembleDebug` against it. Brace/syntax
-  and resource-id cross-references were checked structurally, not compiled.
-  Build it for real before relying on it — this update in particular touches
-  more moving parts (a new dependency, a new permission, `onBackPressedDispatcher`,
-  `evaluateJavascript` callbacks) than the caching-only version did.
-- **No Gradle wrapper jar included**, same reason — run `gradle wrapper --gradle-version 8.7`
-  once locally.
-- **`androidx.activity:activity-ktx` was added explicitly** for
-  `registerForActivityResult`/`onBackPressedDispatcher.addCallback`. It likely
-  would have come transitively through `appcompat` anyway, but after the
-  Compose-plugin surprise on the other project, I'd rather declare it and be
-  wrong-but-harmless than assume and be wrong-and-broken.
-- **Notifications are simulated, not real push** — see "Push notifications"
-  above. No backend, no FCM.
-- **The "already open, suppressed" notification logic is currently
-  unreachable through the UI.** It only fires when `simulateIncomingMessage()`
-  is triggered while `currentlyOpenChatId` matches the picked contact — but
-  that value is only non-null while a thread is open, and the drawer's
-  "Simulate notification" trigger is only reachable while the *list* is
-  showing (per this feature's own "no drawer on the detail screen" rule).
-  So in practice, every simulated notification is fired from a state where
-  no chat is open, and the suppression branch never executes. The code is
-  still correct and still worth keeping — it's exactly what you'd want if
-  simulation were triggered a different way (e.g. a debug menu reachable from
-  anywhere, or a real FCM message arriving while a thread is open) — but as
-  wired right now, it's dead in normal use. Worth deciding: should "Simulate
-  notification" be reachable from the thread screen too (defeating part of
-  "list-only drawer"), or is the suppression logic just future-proofing for
-  when real push replaces the drawer trigger?
-- No offline "you're viewing cached content" indicator in the UI — the cache
-  itself is still invisible to the end user by design.
