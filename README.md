@@ -4,6 +4,13 @@ A single-Activity Android app that loads the [chat-app](../chat-app) frontend
 in a WebView, with its own html/css/js requests cached to disk so repeat and
 offline loads don't need the network.
 
+## Demo Video
+
+The demo covers WebView navigation, Add Contact, native notifications,
+deep linking, offline caching, and local persistence.
+
+[▶ Watch the demo on Google Drive](https://drive.google.com/file/d/1ZY6EUkAPIzry84REVVo0WI3sOdvup6US/view?usp=sharing)
+
 ## How it fits together
 
 - The chat frontend (`chat-app/`) is a **single-page app** — the list, thread,
@@ -85,23 +92,6 @@ visually: `updateDrawerAvailability()` sets the hamburger trigger to
 `DrawerLayout.LOCK_MODE_LOCKED_CLOSED` whenever `currentScreen != "list"` —
 so it can't be opened by an edge swipe either, not only by a hidden button.
 
-**One interpretation call worth flagging:** the ask said "detail screen"
-specifically, which in this project's own terminology has meant the chat
-thread. I extended the same hide/lock rule to the add-contact ("newchat")
-screen too, on the reasoning that the request's actual intent — a drawer
-that's reachable only from the list — implies both. If you wanted the drawer
-still available from add-contact, that's a one-line change: swap
-`currentScreen == "list"` for `currentScreen != "thread"` in
-`updateDrawerAvailability()`.
-
-The drawer UI itself is plain `androidx.drawerlayout.widget.DrawerLayout` +
-a hand-built `LinearLayout` of two `TextView` rows — not Material Components'
-`NavigationView` — to avoid pulling in the Material Components library for
-one drawer with two rows. `androidx.drawerlayout` is small and official
-AndroidX, no theming side effects. The hamburger icon and the drawer's accent
-color reuse the exact same hex values as `chat-app/styles.css`'s CSS
-variables (see `colors.xml`), so the native chrome doesn't visually clash
-with the WebView content sitting right next to it.
 
 ## Push notifications (simulated)
 
@@ -133,17 +123,11 @@ visibly do anything — no crash, but check the permission if nothing appears).
    cd chat-app
    python3 -m http.server 8000
    ```
-2. Generate the Gradle wrapper once (this project's `gradle-wrapper.properties`
-   is pinned to Gradle 8.7, but the jar itself isn't checked in — see "Known
-   limitations" below):
-   ```bash
-   gradle wrapper --gradle-version 8.7
-   ```
-3. Open this folder in Android Studio, let it sync, and run on an emulator.
+2. Open this folder in Android Studio, let it sync, and run on an emulator.
    `MainActivity.BASE_URL` already points at `http://10.0.2.2:8000`, which is
    the emulator's alias for your host machine's `localhost` — no change
    needed for emulator use.
-4. **Physical device instead?** Change `BASE_URL` in `MainActivity.kt` to your
+3. **Physical device instead?** Change `BASE_URL` in `MainActivity.kt` to your
    dev machine's LAN IP (`ipconfig getifaddr en0` on macOS), e.g.
    `http://192.168.1.23:8000`, and make sure the device is on the same Wi-Fi.
 
