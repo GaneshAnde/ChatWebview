@@ -32,6 +32,8 @@ class MainActivity : AppCompatActivity() {
     private var activeChatId: String? = null
     private var webReady = false
 
+    private var currentScreen : String? = null
+
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             if (!granted) {
@@ -68,6 +70,7 @@ class MainActivity : AppCompatActivity() {
 
         addJavascriptInterface(
             ChatNativeBridge(this@MainActivity) { screen, chatId ->
+                currentScreen = screen
                 activeChatId = chatId.takeIf { screen == "thread" }
                 updateDrawer()
             },
@@ -128,7 +131,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateDrawer() {
-        val onChatList = activeChatId == null
+
+        val onChatList = currentScreen == "list"
 
         menuButton.visibility = if (onChatList) View.VISIBLE else View.GONE
 
