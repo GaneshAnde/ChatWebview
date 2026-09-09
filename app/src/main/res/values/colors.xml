@@ -1,0 +1,9 @@
+<resources>
+    <!-- Matches the CSS custom properties in chat-app/styles.css, so native
+         chrome (drawer, highlighted item) reads as part of the same app as
+         the WebView content rather than a visually separate shell. -->
+    <color name="hf_accent">#146356</color>
+    <color name="hf_accent_dim">#DCEFE9</color>
+    <color name="hf_ink">#16211D</color>
+    <color name="hf_hairline">#E4E1D8</color>
+</resources>

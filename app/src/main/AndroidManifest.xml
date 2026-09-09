@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Required on API 33+ to post notifications; requested at runtime too — see
+         MainActivity.requestNotificationPermissionIfNeeded(). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.ChatWebView"
+        android:usesCleartextTraffic="true">
+        <!--
+          usesCleartextTraffic is required to talk to the local dev server
+          (plain http://). See README "Cleartext traffic" before shipping
+          anything beyond local development — this flag is intentionally
+          broad and should be scoped or removed once you're not pointing at
+          a plain-http local server.
+        -->
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:label="@string/app_name">
+            <!--
+              singleTop: tapping a notification while the app is already running
+              reuses this instance (onNewIntent) instead of creating a fresh one,
+              so the existing WebView/cache state isn't thrown away just to
+              deep-link into a chat. See MainActivity.onNewIntent.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+    </application>
+
+</manifest>

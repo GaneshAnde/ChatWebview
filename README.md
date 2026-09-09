@@ -1,0 +1,221 @@
+# ChatWebView (Android)
+
+A single-Activity Android app that loads the [chat-app](../chat-app) frontend
+in a WebView, with its own html/css/js requests cached to disk so repeat and
+offline loads don't need the network.
+
+## How it fits together
+
+- The chat frontend (`chat-app/`) is a **single-page app** — the list, thread,
+  and add-contact screens are all client-side JS state inside one loaded
+  `index.html` (see `chat-list.js`/`chat-detail.js`/`chat-new.js`). There's no
+  separate URL per screen.
+- So Android's job is small: load `index.html` once, and make sure its
+  html/css/js requests get cached. Everything else — navigating to a chat,
+  opening the add-contact form — is the JS you already built, running as-is
+  inside the WebView.
+
+## Files
+
+- `MainActivity.kt` — creates the WebView, points it at `BASE_URL + "/index.html"`,
+  installs `CachingWebViewClient` and `ChatNativeBridge`, owns the nav drawer,
+  back-button handling, and the notification deep-link flow
+- `CachingWebViewClient.kt` — the interception logic: on `shouldInterceptRequest`,
+  checks `FileCache` first; on a miss, fetches over `HttpURLConnection`, caches
+  the response, and serves it. Only requests under `BASE_URL` ending in
+  `.html`/`.css`/`.js` are intercepted — everything else passes through to
+  WebView's normal handling untouched.
+- `FileCache.kt` — a minimal disk cache keyed by SHA-256 of the URL (two files
+  per entry: bytes + content type). No eviction — fine for a handful of
+  app-shell files; not meant to grow past that.
+- `ChatNativeBridge.kt` — the JS-to-Android half of the bridge: a single
+  `@JavascriptInterface` method (`onScreenChanged`) called from
+  `chat-detail.js`/`chat-new.js`, letting native track which screen — and,
+  for the thread, which chat — is currently visible.
+- `NotificationHelper.kt` — notification channel setup and the "new message"
+  notification builder, with a `PendingIntent` that deep-links back into the
+  right chat on tap.
+
+## JS↔Android bridge
+
+Bidirectional, and each direction has a real purpose — not built just to
+exist:
+
+- **Android → JS (fixes the back button):** `MainActivity` never overrides
+  back by guessing what screen is showing. Instead it calls
+  `window.AndroidNav.back()` (defined in the frontend's `android-bridge.js`)
+  and reads the boolean result: `true` means a screen was closed in the page
+  (thread or add-contact → list), so Android does nothing further; `false`
+  means the list was already showing, so Android falls through to its normal
+  back behavior (exiting the Activity). Hardware back now correctly steps
+  thread/add-contact → list → exit. (If the drawer is open, back closes that
+  first instead — see "Nav drawer" below.)
+- **JS → Android (drives the drawer and notification suppression):**
+  `chat-detail.js` and `chat-new.js` call
+  `window.AndroidBridge.onScreenChanged(screen, chatId)` — `screen` is
+  `"list"`, `"thread"`, or `"newchat"` — every time the visible screen
+  changes. `MainActivity` tracks this as `currentScreen` /
+  `currentlyOpenChatId` and uses it for two things: showing/hiding the nav
+  drawer trigger (list-screen-only), and skipping a simulated notification
+  when it's for the chat you're already looking at.
+- **Android → JS (deep link):** no new bridge method needed here — tapping a
+  notification just calls the already-public `window.ChatDetail.open(chatId)`.
+
+`@JavascriptInterface` methods run on a WebView-internal thread, not the UI
+thread, so `ChatNativeBridge` posts back via `runOnUiThread` before touching
+`currentScreen`/`currentlyOpenChatId`.
+
+## Nav drawer
+
+A left drawer on the list screen only, with two items:
+
+- **Messages** — closes the drawer; no navigation happens, since you're
+  already on the list. It's shown highlighted (accent background, bold accent
+  text) every time the drawer opens — there's currently only one section, and
+  the drawer is only reachable from the list screen in the first place (see
+  below), so "Messages" is definitionally always the active one. If you add a
+  second drawer destination later, this highlight needs to become conditional
+  rather than hardcoded — see `setUpDrawer()` in `MainActivity.kt`.
+- **Simulate notification** — triggers the same `simulateIncomingMessage()`
+  flow described below, then closes the drawer.
+
+**"No left navigation on the detail screen"** is enforced two ways, not just
+visually: `updateDrawerAvailability()` sets the hamburger trigger to
+`View.GONE` (not just invisible) and locks the drawer itself via
+`DrawerLayout.LOCK_MODE_LOCKED_CLOSED` whenever `currentScreen != "list"` —
+so it can't be opened by an edge swipe either, not only by a hidden button.
+
+**One interpretation call worth flagging:** the ask said "detail screen"
+specifically, which in this project's own terminology has meant the chat
+thread. I extended the same hide/lock rule to the add-contact ("newchat")
+screen too, on the reasoning that the request's actual intent — a drawer
+that's reachable only from the list — implies both. If you wanted the drawer
+still available from add-contact, that's a one-line change: swap
+`currentScreen == "list"` for `currentScreen != "thread"` in
+`updateDrawerAvailability()`.
+
+The drawer UI itself is plain `androidx.drawerlayout.widget.DrawerLayout` +
+a hand-built `LinearLayout` of two `TextView` rows — not Material Components'
+`NavigationView` — to avoid pulling in the Material Components library for
+one drawer with two rows. `androidx.drawerlayout` is small and official
+AndroidX, no theming side effects. The hamburger icon and the drawer's accent
+color reuse the exact same hex values as `chat-app/styles.css`'s CSS
+variables (see `colors.xml`), so the native chrome doesn't visually clash
+with the WebView content sitting right next to it.
+
+## Push notifications (simulated)
+
+The drawer's **"Simulate notification" item** posts a notification for a
+random demo contact and, on tap, launches/resumes the app with that chat
+open.
+
+**This is not real push.** There's no backend here, no FCM integration, no
+server that ever tells the app a message arrived — the button exists because
+there's nothing else to trigger the pipeline with. A real integration would
+receive a push payload (chat id, sender, preview) via Firebase Cloud
+Messaging and call `NotificationHelper.showMessageNotification(...)` from
+that handler instead of a button tap; everything downstream of that call
+(channel setup, the `PendingIntent`, deep-linking into the right chat once
+the WebView loads) is the same either way.
+
+The demo contact list in `MainActivity.DEMO_CONTACTS` is a hardcoded mirror
+of a few entries from `chat-app/data.js`, for the same reason — a real
+payload would carry this data itself, not require Android to already know it.
+
+Notifications need `POST_NOTIFICATIONS` permission on API 33+; the app
+requests it at launch (declining it just means the simulate button won't
+visibly do anything — no crash, but check the permission if nothing appears).
+
+## Run it
+
+1. Start the chat frontend's local server first (from the `chat-app` project):
+   ```bash
+   cd chat-app
+   python3 -m http.server 8000
+   ```
+2. Generate the Gradle wrapper once (this project's `gradle-wrapper.properties`
+   is pinned to Gradle 8.7, but the jar itself isn't checked in — see "Known
+   limitations" below):
+   ```bash
+   gradle wrapper --gradle-version 8.7
+   ```
+3. Open this folder in Android Studio, let it sync, and run on an emulator.
+   `MainActivity.BASE_URL` already points at `http://10.0.2.2:8000`, which is
+   the emulator's alias for your host machine's `localhost` — no change
+   needed for emulator use.
+4. **Physical device instead?** Change `BASE_URL` in `MainActivity.kt` to your
+   dev machine's LAN IP (`ipconfig getifaddr en0` on macOS), e.g.
+   `http://192.168.1.23:8000`, and make sure the device is on the same Wi-Fi.
+
+## Verifying it actually works
+
+**Caching:**
+1. Run the app once with the dev server up and Wi-Fi/data on — filter Logcat
+   for tag `ChatWebView`, you should see six `NETWORK <-` lines (index.html,
+   styles.css, data.js, chat-list.js, chat-detail.js, chat-new.js).
+2. Force-stop and relaunch the app (still online) — same six lines should now
+   read `CACHE <-` instead.
+3. Turn on airplane mode, force-stop, relaunch — the app should still load
+   fully from cache.
+
+**Back button:** open a chat, press hardware back — should return to the
+list, not exit the app. Open the `+` add-contact form, press back — same
+thing. Press back once more from the list — now it should exit. Open the
+drawer, press back — should close the drawer, not exit or navigate.
+
+**Nav drawer:** on the list screen, tap the hamburger icon (top-left) —
+drawer opens, "Messages" shown highlighted. Tap "Messages" — drawer closes,
+still on the list. Open a chat thread or the add-contact form — the hamburger
+icon should be gone entirely, and swiping in from the left edge shouldn't
+open anything.
+
+**Notifications:** from the list screen, open the drawer and tap "Simulate
+notification" — a notification should appear; tapping it should open (or
+resume) the app with that thread showing. See "Known limitations" below for
+why the suppression behavior can't currently be exercised through the UI at
+all.
+
+## Cleartext traffic
+
+The manifest sets `android:usesCleartextTraffic="true"` app-wide, because the
+dev server is plain `http://`. That's fine for local development but is a
+broad flag — Android 9+ blocks cleartext by default for good reason. Before
+this touches anything beyond your own dev machine, either serve over HTTPS or
+replace the blanket flag with a network security config scoped to just your
+dev server's host/IP.
+
+## Known limitations
+
+- **Not build-verified here.** Like the earlier HybridFlow project, this was
+  written and reviewed by hand in a sandbox without Android SDK/Google Maven
+  access — I could not run `./gradlew assembleDebug` against it. Brace/syntax
+  and resource-id cross-references were checked structurally, not compiled.
+  Build it for real before relying on it — this update in particular touches
+  more moving parts (a new dependency, a new permission, `onBackPressedDispatcher`,
+  `evaluateJavascript` callbacks) than the caching-only version did.
+- **No Gradle wrapper jar included**, same reason — run `gradle wrapper --gradle-version 8.7`
+  once locally.
+- **`androidx.activity:activity-ktx` was added explicitly** for
+  `registerForActivityResult`/`onBackPressedDispatcher.addCallback`. It likely
+  would have come transitively through `appcompat` anyway, but after the
+  Compose-plugin surprise on the other project, I'd rather declare it and be
+  wrong-but-harmless than assume and be wrong-and-broken.
+- **Notifications are simulated, not real push** — see "Push notifications"
+  above. No backend, no FCM.
+- **The "already open, suppressed" notification logic is currently
+  unreachable through the UI.** It only fires when `simulateIncomingMessage()`
+  is triggered while `currentlyOpenChatId` matches the picked contact — but
+  that value is only non-null while a thread is open, and the drawer's
+  "Simulate notification" trigger is only reachable while the *list* is
+  showing (per this feature's own "no drawer on the detail screen" rule).
+  So in practice, every simulated notification is fired from a state where
+  no chat is open, and the suppression branch never executes. The code is
+  still correct and still worth keeping — it's exactly what you'd want if
+  simulation were triggered a different way (e.g. a debug menu reachable from
+  anywhere, or a real FCM message arriving while a thread is open) — but as
+  wired right now, it's dead in normal use. Worth deciding: should "Simulate
+  notification" be reachable from the thread screen too (defeating part of
+  "list-only drawer"), or is the suppression logic just future-proofing for
+  when real push replaces the drawer trigger?
+- No offline "you're viewing cached content" indicator in the UI — the cache
+  itself is still invisible to the end user by design.

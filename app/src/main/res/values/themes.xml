@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.ChatWebView" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>
