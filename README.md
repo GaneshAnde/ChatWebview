@@ -1,6 +1,6 @@
 # ChatWebView (Android)
 
-A single-Activity Android app that loads the [ChatApp](../ChatApp) frontend
+A single-Activity Android app that loads the [ChatApp](https://github.com/GaneshAnde/ChatApp) frontend
 in a WebView, with its own html/css/js requests cached to disk so repeat and
 offline loads don't need the network.
 
