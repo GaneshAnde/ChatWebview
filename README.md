@@ -1,6 +1,6 @@
 # ChatWebView (Android)
 
-A single-Activity Android app that loads the [chat-app](../chat-app) frontend
+A single-Activity Android app that loads the [ChatApp](../ChatApp) frontend
 in a WebView, with its own html/css/js requests cached to disk so repeat and
 offline loads don't need the network.
 
@@ -13,7 +13,7 @@ deep linking, offline caching, and local persistence.
 
 ## How it fits together
 
-- The chat frontend (`chat-app/`) is a **single-page app** — the list, thread,
+- The chat frontend (`/ChatApp`) is a **single-page app** — the list, thread,
   and add-contact screens are all client-side JS state inside one loaded
   `index.html` (see `chat-list.js`/`chat-detail.js`/`chat-new.js`). There's no
   separate URL per screen.
